@@ -9,6 +9,8 @@ def linear_cost(theta, xs, ys):
         err_sum += (hyp(xs[i]) - ys[i])**2
     return err_sum / (2 * len(xs))
 
+
+# Cost function for logistic regression
 def logistic_cost(theta, xs, ys):
     err_sum = 0
     hyp = h_logistic(theta)
@@ -16,6 +18,7 @@ def logistic_cost(theta, xs, ys):
         err_sum += ys[i] * -np.log(hyp(xs[i])) + -(1 - ys[i]) * np.log(1 - hyp(xs[i]))
 
     return err_sum / (2 * len(xs))
+
 
 # Gradient descent implementation,
 # which minimises MSE of hyp, by adjusting parameters theta
@@ -42,6 +45,7 @@ def h(theta):
 
     return hyp
 
+
 # Logistic regression hypothesis
 # function generator.
 # Returns a function that predicts a y value between 0 and 1
@@ -52,6 +56,7 @@ def h_logistic(theta):
     return hyp
 
 
+# Fit a logistic regression example.
 def fit_logistic():
     xs = np.asarray(list(map(lambda x: [1, x], np.asarray([1,2,3,4,5]))))
     ys = np.asarray([0,0,0,1,1])
@@ -70,6 +75,7 @@ def fit_logistic():
     plt.show()
 
 
+# Fit a linear regression example.
 def fit_linear():
     x1 = np.asarray([1,2,3,5,2,3,6,3,3.6,3.4,2.5])
     x2 = x1 * x1
@@ -91,6 +97,7 @@ def fit_linear():
     plt.show()
 
     print(h_y)
+
 
 if __name__ == "__main__":
     fit_logistic()

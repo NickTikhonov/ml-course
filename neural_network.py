@@ -1,5 +1,6 @@
 import numpy as np
-
+from tqdm import tqdm
+from matplotlib import pyplot as plt
 
 class NeuralNetwork:
     # s is the number of units in each layer, as a numpy vecotor.
@@ -14,7 +15,14 @@ class NeuralNetwork:
     def init_weights(self):
         weights = []
         for i in range(len(self.s) - 1):
-            weights.append(np.ones([self.s[i + 1], self.s[i] + 1]))
+            weights.append(np.random.rand(self.s[i + 1], self.s[i] + 1))
+        return weights
+
+    # given network shape, initialise network weights.
+    def zero_weights(self):
+        weights = []
+        for i in range(len(self.s) - 1):
+            weights.append(np.zeros([self.s[i + 1], self.s[i] + 1]))
         return weights
 
     # Run a forward pass of values x
@@ -33,9 +41,22 @@ class NeuralNetwork:
     def predict(self, x):
         return self.activation(self.forward_pass(x)[-1])
 
-    def back_propagation(self, xs, ys, lr=0.001):
+    def cost(self, xs, ys):
+        sum = 0
+        for i in range(len(xs)):
+            err_sum = 0
+            y = ys[i]
+            h_y = self.predict(xs[i])
+            for x in range(len(h_y)):
+                err_sum += y[x] * -np.log(h_y[x]) + -(1 - y[x]) * np.log(1 - h_y[x])
+
+            sum += err_sum
+
+        return sum / len(xs)
+
+    def back_propagation(self, xs, ys, lr=0.0001):
         assert len(xs) == len(ys)
-        delta = self.init_weights()
+        delta = self.zero_weights()
         for i in range(len(xs)):
             zs = self.forward_pass(xs[i])
             # initialise error tensor
@@ -43,7 +64,7 @@ class NeuralNetwork:
             # network values.
             error = [np.zeros(x.shape) for x in zs]
             error[-1] = self.activation(zs[-1]) - ys[i]
-            for l in reversed(range(len(zs) - 1)[1:]):
+            for l in reversed(range(len(zs) - 1)):
                 lhs = np.matmul(np.atleast_2d(self.weights[l]).T, error[l + 1])[1:]
                 rhs = self.activation_derivative(zs[l])
                 error[l] = lhs * rhs
@@ -61,16 +82,23 @@ class NeuralNetwork:
     def activation_derivative(self, x):
         return self.activation(x) * (1 - self.activation(x))
 
+
+def train(nn, xs, ys, epochs, lr=0.1, plot=True):
+    costs = []
+    for _ in tqdm(range(epochs)):
+        costs.append(nn.cost(xs, ys))
+        nn.back_propagation(xs, ys, lr=lr)
+
+    if plot:
+        plt.plot(range(epochs), costs, 'ro')
+        plt.show()
+
+
 if __name__ == "__main__":
-    n = NeuralNetwork([2,5,5,1])
-    xs = [[0,0], [0,1], [1,0], [1,1]]
-    ys = [[0], [1], [1], [0]]
+    n = NeuralNetwork([1,10,10, 10, 1])
+    xs = [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9]]
+    ys = [[0], [1], [0], [1], [0], [1], [0], [1], [0], [1]]
+    train(n, xs, ys, 100000)
 
-    for i in range(10000):
-        print(n.predict(xs[0]) + n.predict(xs[3]) - n.predict(xs[1]) - n.predict(xs[2]))
-        n.back_propagation(xs, ys)
+    print(n.predict(xs[0]), n.predict(xs[1]), n.predict(xs[2]), n.predict(xs[3]))
 
-    print(n.predict(xs[0]))
-    print(n.predict(xs[1]))
-    print(n.predict(xs[2]))
-    print(n.predict(xs[3]))

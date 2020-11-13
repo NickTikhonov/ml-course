@@ -54,6 +54,7 @@ class NeuralNetwork:
 
         return sum / len(xs)
 
+    # Run one pass of backpropagation
     def back_propagation(self, xs, ys, lr=0.0001):
         assert len(xs) == len(ys)
         delta = self.zero_weights()
@@ -76,6 +77,17 @@ class NeuralNetwork:
         for w in range(len(self.weights)):
            self.weights[w] -= delta[w] * lr * 1/len(xs)
 
+    # Train the network
+    def train(self, xs, ys, epochs=1000, lr=0.1, plot=False):
+        costs = []
+        for _ in tqdm(range(epochs)):
+            costs.append(self.cost(xs, ys))
+            self.back_propagation(xs, ys, lr=lr)
+
+        if plot:
+            plt.plot(range(epochs), costs, 'ro')
+            plt.show()
+
     def activation(self, x):
         return 1 / (1 + np.exp(-x))
 
@@ -83,22 +95,12 @@ class NeuralNetwork:
         return self.activation(x) * (1 - self.activation(x))
 
 
-def train(nn, xs, ys, epochs, lr=0.1, plot=True):
-    costs = []
-    for _ in tqdm(range(epochs)):
-        costs.append(nn.cost(xs, ys))
-        nn.back_propagation(xs, ys, lr=lr)
-
-    if plot:
-        plt.plot(range(epochs), costs, 'ro')
-        plt.show()
-
 
 if __name__ == "__main__":
     n = NeuralNetwork([1,10,10, 10, 1])
     xs = [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9]]
     ys = [[0], [1], [0], [1], [0], [1], [0], [1], [0], [1]]
-    train(n, xs, ys, 100000)
+    n.train(xs, ys, epochs=100000)
 
     print(n.predict(xs[0]), n.predict(xs[1]), n.predict(xs[2]), n.predict(xs[3]))
 

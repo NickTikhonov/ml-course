@@ -11,6 +11,9 @@ class NeuralNetwork:
         assert len(s) >= 2
         self.weights = self.init_weights()
 
+    def n_params(self):
+        return sum([w.size for w in self.weights])
+
     # given network shape, initialise network weights.
     def init_weights(self):
         weights = []
@@ -60,17 +63,11 @@ class NeuralNetwork:
         delta = self.zero_weights()
         for i in range(len(xs)):
             zs = self.forward_pass(xs[i])
-            # initialise error tensor
-            # to all zeros, and same shape as
-            # network values.
             error = [np.zeros(x.shape) for x in zs]
             error[-1] = self.activation(zs[-1]) - ys[i]
             for l in reversed(range(len(zs) - 1)):
-                lhs = np.matmul(np.atleast_2d(self.weights[l]).T, error[l + 1])[1:]
-                rhs = self.activation_derivative(zs[l])
-                error[l] = lhs * rhs
+                error[l] = np.matmul(np.atleast_2d(self.weights[l]).T, error[l + 1])[1:] * self.activation_derivative(zs[l])
 
-            # There is some sort of bug here...
             for l in range(len(zs) - 1):
                 delta[l] += np.matmul(np.atleast_2d(error[l + 1]).T, np.atleast_2d(np.insert(zs[l], 0, 1)))
 
@@ -92,12 +89,13 @@ class NeuralNetwork:
         return 1 / (1 + np.exp(-x))
 
     def activation_derivative(self, x):
-        return self.activation(x) * (1 - self.activation(x))
+        act = self.activation(x)
+        return np.multiply(act, (1 - act))
 
 
 
 if __name__ == "__main__":
-    n = NeuralNetwork([1,10,10, 10, 1])
+    n = NeuralNetwork([100,100,100,10])
     xs = [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9]]
     ys = [[0], [1], [0], [1], [0], [1], [0], [1], [0], [1]]
     n.train(xs, ys, epochs=100000)

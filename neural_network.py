@@ -31,6 +31,15 @@ class NeuralNetwork:
         assert len(s) >= 2
         self.weights = self.init_weights()
 
+    def save_weights(self, fname):
+        np.save(np.asarray(self.weights, dtype="object"), fname)
+
+    def load_weights(self, fname):
+        weights = np.load(fname)
+        self.weights = []
+        for w in weights:
+            self.weights.append(w)
+
     def n_params(self):
         return sum([w.size for w in self.weights])
 

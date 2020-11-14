@@ -1,6 +1,26 @@
 import numpy as np
 from tqdm import tqdm
-from matplotlib import pyplot as plt
+
+
+def classify_binary(model, xs, threshold=0.5):
+    """
+    Perform binary classification
+    using the model, on the input set xs.
+    Threshold allows adjusting precision/recall ratio
+    - higher = more precise/less recall.
+    """
+
+    out = []
+    for x in xs:
+        y = model.predict(x)
+        assert len(y) == 1
+        if y[0] > threshold:
+            out.append(1)
+        else:
+            out.append()
+
+    return np.asarray(out)
+
 
 class NeuralNetwork:
     # s is the number of units in each layer, as a numpy vecotor.
@@ -58,7 +78,7 @@ class NeuralNetwork:
         return sum / len(xs)
 
     # Run one pass of backpropagation
-    def back_propagation(self, xs, ys, lr=0.0001):
+    def backprop(self, xs, ys, lr=0.0001):
         assert len(xs) == len(ys)
         delta = self.zero_weights()
         for i in range(len(xs)):
@@ -75,15 +95,13 @@ class NeuralNetwork:
            self.weights[w] -= delta[w] * lr * 1/len(xs)
 
     # Train the network
-    def train(self, xs, ys, epochs=1000, lr=0.1, plot=False):
-        costs = []
-        for _ in tqdm(range(epochs)):
-            costs.append(self.cost(xs, ys))
-            self.back_propagation(xs, ys, lr=lr)
+    def train(self, xs, ys, epochs=1000, lr=0.1, cb=None):
+        for i in tqdm(range(epochs)):
+            cost = self.cost(xs, ys)
+            self.backprop(xs, ys, lr=lr)
+            if cb:
+                cb(i, cost)
 
-        if plot:
-            plt.plot(range(epochs), costs, 'ro')
-            plt.show()
 
     def activation(self, x):
         return 1 / (1 + np.exp(-x))
@@ -93,12 +111,4 @@ class NeuralNetwork:
         return np.multiply(act, (1 - act))
 
 
-
-if __name__ == "__main__":
-    n = NeuralNetwork([100,100,100,10])
-    xs = [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9]]
-    ys = [[0], [1], [0], [1], [0], [1], [0], [1], [0], [1]]
-    n.train(xs, ys, epochs=100000)
-
-    print(n.predict(xs[0]), n.predict(xs[1]), n.predict(xs[2]), n.predict(xs[3]))
 

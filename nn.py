@@ -36,39 +36,44 @@ class NN:
         return sum([w.size for w in self.weights] + [b.size for b in self.bias])
 
     def forward(self, xs):
-        z1 = np.dot(self.weights[0], xs.T) + self.bias[0]
-        a1 = SigmoidActivation.f(z1)
-        z2 = np.dot(self.weights[1], a1) + self.bias[1]
-        a2 = SigmoidActivation.f(z2)
-        return a2
+        # forward pass
+        z = [None]
+        a = [xs.T]
+
+        for i in range(len(self.weights)):
+            z.append(np.dot(self.weights[i], a[i]) + self.bias[i])
+            a.append(SigmoidActivation.f(z[i + 1]))
+
+        return (z, a)
+
+    def predict(self, xs):
+        (z, a) = self.forward(xs)
+        return a[-1]
 
     def loss(self, xs, ys):
-        y_hat = self.forward(xs)
+        y_hat = self.predict(xs)
         diff = np.sum(y_hat - ys.T)
         return (diff * diff) / len(xs)
 
-    def backprop_1l(self, xs, ys, alpha=0.01):
-        # forward pass
-        z1 = np.dot(self.weights[0], xs.T) + self.bias[0]
-        a1 = SigmoidActivation.f(z1)
-        z2 = np.dot(self.weights[1], a1) + self.bias[1]
-        a2 = SigmoidActivation.f(z2)
+    def backprop(self, xs, ys, alpha=0.01):
+        (z, a) = self.forward(xs)
 
         # backward pass
         m = xs.shape[0]
-        dz2 = a2 - ys.T
-        dw2 = (1/m) * np.dot(dz2, a1.T)
-        db2 = (1/m) * np.sum(dz2, axis=1, keepdims=True)
-        dz1 = np.dot(self.weights[1].T, dz2) * SigmoidActivation.d(z1)
-        dw1 = (1/m) * np.dot(dz1, xs)
-        db1 = (1/m) * np.sum(dz1, axis=1, keepdims=True)
+        dz = [None for i in range(len(z))]
+        dw = [None for i in range(len(z))]
+        db = [None for i in range(len(z))]
 
-        # update weights
-        self.weights[1] = self.weights[1] - (alpha * dw2)
-        self.bias[1] = self.bias[1] - (alpha * db2)
-        self.weights[0] = self.weights[0] - (alpha * dw1)
-        self.bias[0] = self.bias[0] - (alpha * db1)
+        dz[-1] = a[-1] - ys.T
+        for i in reversed(range(len(self.weights))):
+            ii = i + 1
+            if dz[ii] is None:
+                dz[ii] = np.dot(self.weights[ii].T, dz[ii + 1]) * SigmoidActivation.d(z[ii])
+            dw[ii] = (1/m) * np.dot(dz[ii], a[ii - 1].T)
+            db[ii] = (1/m) * np.sum(dz[ii], axis=1, keepdims=True)
 
+        for i in range(len(self.weights)):
+            self.weights[i] -= (alpha * dw[i + 1])
 
 
 if __name__ == "__main__":
@@ -77,10 +82,10 @@ if __name__ == "__main__":
     age = titanic["Age"]
     xs = np.asarray([age, sex]).T
     ys = np.asarray([[x] for x in titanic["Survived"]])
+    nn = NN([2,30,30,30,1])
 
-    nn = NN([2,10,1])
-    for i in range(100):
+    for i in range(1000):
+        nn.backprop(xs, ys)
         print(nn.loss(xs, ys))
-        nn.backprop_1l(xs, ys)
 
 

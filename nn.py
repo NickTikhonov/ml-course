@@ -58,9 +58,9 @@ class NN:
         return a[-1]
 
     def loss(self, xs, ys):
-        y_hat = self.predict(xs)
-        diff = np.sum(y_hat - ys.T)
-        return (diff * diff) / len(xs)
+        y_hat = self.predict(xs).T
+        diff = np.sum(ys*np.log(y_hat) + (1-ys)*np.log(1-y_hat))
+        return -diff / len(xs)
 
     def backprop(self, xs, ys, alpha=0.01, dropout=0):
         weights = [np.copy(w) for w in self.weights]
@@ -101,10 +101,10 @@ if __name__ == "__main__":
     age = titanic["Age"]
     xs = np.asarray([age, sex]).T
     ys = np.asarray([[x] for x in titanic["Survived"]])
-    nn = NN([2,30,30,30,30,1])
+    nn = NN([2,100,100,1])
 
     for i in range(10000):
-        nn.backprop(xs, ys, dropout=0.1)
+        nn.backprop(xs, ys, dropout=0, alpha=0.001)
         print(nn.loss(xs, ys))
 
 

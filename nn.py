@@ -18,7 +18,6 @@ class NN:
     - add ability to change activation functions for hidden layers
     - add ability to provide a custom cost function
     - add support for regularisation
-    - add support for mini-batching
     """
     # n is the number of neurons in each layer
     def __init__(self, n):
@@ -93,7 +92,9 @@ class NN:
         self.weights = weights
         self.bias = bias
             
-
+def batch(xs, ys, group_size):
+    for i in range(0, len(xs), group_size):
+        yield (xs[i:i+group_size], ys[i:i+group_size])
 
 if __name__ == "__main__":
     titanic = pd.read_csv("data/train.csv")[["Age", "Sex", "Survived"]].dropna()
@@ -104,7 +105,8 @@ if __name__ == "__main__":
     nn = NN([2,100,100,1])
 
     for i in range(10000):
-        nn.backprop(xs, ys, dropout=0, alpha=0.001)
-        print(nn.loss(xs, ys))
+        for x, y in batch(xs, ys, 100):
+            nn.backprop(x, y, dropout=0, alpha=0.0001)
+        print(nn.loss(x, y))
 
 

@@ -1,3 +1,4 @@
+import h5py
 import pandas as pd
 import numpy as np
 from tqdm import trange
@@ -61,6 +62,10 @@ class NN:
         diff = np.sum(ys*np.log(y_hat) + (1-ys)*np.log(1-y_hat))
         return -diff / len(xs)
 
+    def onehot_acc(self, xs, ys):
+        y_hat = self.predict(xs).T
+        return np.average(np.argmax(ys, axis=1) == np.argmax(y_hat, axis=1))
+
     def forward(self, xs):
         # forward pass
         z = [None]
@@ -115,10 +120,12 @@ class GradientDescent:
                 self.m.bias[i] -= (lr * db[i + 1])
 
 class Adam:
-    def __init__(self, model, xs, ys):
+    def __init__(self, model, xs, ys, batch_size = 0):
         self.m = model
-        self.xs = xs
-        self.ys = ys
+        if batch_size == 0:
+            self.batches = [(xs, ys)]
+        else:
+            self.batches = [(xs[i:i + batch_size], ys[i:i + batch_size]) for i in range(0, len(xs), batch_size)]
         self.dw = None
         self.db = None
 
@@ -136,29 +143,46 @@ class Adam:
     def train(self, epochs=1, lr=0.0001, dropout=0, momentum=0.9):
         epochs = trange(epochs, desc="BasicO")
         for i in epochs:
-            epochs.set_description('BasicO (loss=%g)' % self.m.loss(self.xs, self.ys))
-            (z, a) = self.m.forward(self.xs)
-            if dropout > 0:
-                keep = 1 - dropout
-                a = [np.multiply(np.random.randn(ac.shape[0], ac.shape[1]) < keep, ac) / keep for ac in a]
-            (dw, db) = self.m.backward(z, a, self.ys)
-            self.calculate_momentum(dw, db, momentum)
-               
-            for i in range(len(self.m.weights)):
-                self.m.weights[i] -= (lr * dw[i + 1])
-            for i in range(len(self.m.bias)):
-                self.m.bias[i] -= (lr * db[i + 1])
+            for (xs, ys) in self.batches:
+                epochs.set_description('Adam (acc=%g)' % self.m.onehot_acc(xs, ys))
+                (z, a) = self.m.forward(xs)
+                if dropout > 0:
+                    keep = 1 - dropout
+                    a = [np.multiply(np.random.randn(ac.shape[0], ac.shape[1]) < keep, ac) / keep for ac in a]
+                (dw, db) = self.m.backward(z, a, ys)
+                self.calculate_momentum(dw, db, momentum)
+                   
+                for i in range(len(self.m.weights)):
+                    self.m.weights[i] -= (lr * dw[i + 1])
+                for i in range(len(self.m.bias)):
+                    self.m.bias[i] -= (lr * db[i + 1])
 
 
 if __name__ == "__main__":
-    titanic = pd.read_csv("data/train.csv")[["Age", "Sex", "Survived"]].dropna()
-    sex = [0 if x == "male" else 1 for x in titanic["Sex"]]
-    age = titanic["Age"]
-    xs = np.asarray([age, sex]).T
-    ys = np.asarray([[x] for x in titanic["Survived"]])
-    nn = NN([2,100,100,1], Tanh)
+    MNIST_data = h5py.File("./data/mnist.hdf5", 'r')
+    x_train = np.float32(MNIST_data['x_train'][:])
+    y_train = np.int32(np.array(MNIST_data['y_train'][:, 0])).reshape(-1, 1)
+    x_test  = np.float32(MNIST_data['x_test'][:])
+    y_test  = np.int32(np.array(MNIST_data['y_test'][:, 0])).reshape(-1, 1)
+    MNIST_data.close()
 
-    opt = GradientDescent(nn, xs, ys)
-    opt.train(epochs=2500, lr=0.01)
+    X = np.vstack((x_train, x_test))
+    y = np.vstack((y_train, y_test))
+
+    digits = 10
+    examples = y.shape[0]
+    y = y.reshape(1, examples)
+    Y_new = np.eye(digits)[y.astype('int32')]
+    Y_new = Y_new.T.reshape(digits, examples)
+
+    # number of training set
+    m = 60000
+    m_test = X.shape[0] - m
+    X_train, X_test = X[:m], X[m:]
+    Y_train, Y_test = Y_new[:, :m].T, Y_new[:, m:].T
+
+    nn = NN([784,1000,1000,10], Tanh)
+    opt = Adam(nn, X_train, Y_train, batch_size=2048)
+    opt.train(epochs=100, lr=0.001)
 
 

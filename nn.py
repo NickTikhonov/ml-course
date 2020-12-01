@@ -27,12 +27,6 @@ class Tanh:
         return 1 - f**2
 
 class NN:
-    """
-    Todo:
-    - add ability to change activation functions for hidden layers
-    - add ability to provide a custom cost function
-    - add support for regularisation
-    """
     # n is the number of neurons in each layer
     def __init__(self, n, act, gpu=False):
         self.gpu = gpu
@@ -82,7 +76,13 @@ class NN:
 
         for i in range(len(self.weights)):
             z.append(xp.dot(self.weights[i], a[i]) + self.bias[i])
-            a.append(self.act.f(z[i + 1]))
+            if i == len(self.weights) - 1:
+                # Always use sigmoid for last layer,
+                # since that's what derived in the backpass
+                a.append(Sigmoid.f(z[i + 1]))
+            else:
+                a.append(self.act.f(z[i + 1]))
+
 
         return (z, a)
 
@@ -130,35 +130,46 @@ class GradientDescent:
                 self.m.bias[i] -= (lr * db[i + 1])
 
 class Adam:
-    def __init__(self, model, xs, ys, batch_size = 0):
+    def __init__(self, model, xs, ys, xt, yt, batch_size = 0):
         self.xp = cupy if model.gpu else np
         if model.gpu:
             xs = cupy.asarray(xs)
             ys = cupy.asarray(ys)
+            xt = cupy.asarray(xt)
+            yt = cupy.asarray(yt)
         self.m = model
         if batch_size == 0:
             self.batches = [(xs, ys)]
         else:
             self.batches = [(xs[i:i + batch_size], ys[i:i + batch_size]) for i in range(0, len(xs), batch_size)]
+        self.xt = xt
+        self.yt = yt
+
         self.dw = None
         self.db = None
+        self.sdw = None
+        self.sdb = None
+        self.eps = self.xp.finfo(self.xp.float64).eps
 
     def calculate_momentum(self, dw, db, beta):
         if self.dw is None:
             self.dw = dw
-        if self.db is None:
+            self.sdw = [self.xp.square(d) if d is not None else 1 for d in dw]
             self.db = db
+            self.sdb = [self.xp.square(d) if d is not None else 1 for d in db]
         for i in range(len(self.dw))[1:]:
             self.dw[i] = (self.dw[i] * beta) + (dw[i] * (1 - beta))
+            self.sdw[i] = (self.sdw[i] * beta) + (self.xp.square(dw[i]) * (1 - beta))
         for i in range(len(self.db))[1:]:
             self.db[i] = (self.db[i] * beta) + (db[i] * (1 - beta))
+            self.sdb[i] = (self.sdb[i] * beta) + (self.xp.square(db[i]) * (1 - beta))
 
 
     def train(self, epochs=1, lr=0.0001, dropout=0, momentum=0.9):
         epochs = trange(epochs, desc="BasicO")
-        for i in epochs:
+        for _ in epochs:
             for (xs, ys) in self.batches:
-                epochs.set_description('Adam (acc=%g)' % self.m.onehot_acc(xs, ys))
+                epochs.set_description('Adam (acc=%g, val_acc=%g)' % (self.m.onehot_acc(xs, ys), self.m.onehot_acc(self.xt, self.yt)))
                 (z, a) = self.m.forward(xs)
                 if dropout > 0:
                     keep = 1 - dropout
@@ -166,10 +177,11 @@ class Adam:
                 (dw, db) = self.m.backward(z, a, ys)
                 self.calculate_momentum(dw, db, momentum)
                    
-                for i in range(len(self.m.weights)):
-                    self.m.weights[i] -= (lr * dw[i + 1])
-                for i in range(len(self.m.bias)):
-                    self.m.bias[i] -= (lr * db[i + 1])
+                for iw in range(len(self.m.weights)):
+                    self.m.weights[iw] -= (lr * self.xp.divide(self.dw[iw + 1], (self.xp.sqrt(self.sdw[iw + 1]) + self.eps)))
+
+                for ib in range(len(self.m.bias)):
+                    self.m.bias[ib] -= (lr * (self.db[ib + 1]/(self.xp.sqrt(self.sdb[ib + 1]) + self.eps)))
 
 
 if __name__ == "__main__":
@@ -196,7 +208,7 @@ if __name__ == "__main__":
     Y_train, Y_test = Y_new[:, :m].T, Y_new[:, m:].T
 
     nn = NN([784,1000,1000,10], Tanh, gpu=True)
-    opt = Adam(nn, X_train, Y_train, batch_size=0)
-    opt.train(epochs=100, lr=0.001)
+    opt = Adam(nn, X_train, Y_train, X_test, Y_test, batch_size=4096 * 4)
+    opt.train(epochs=100, lr=0.001, momentum=0.90)
 
 

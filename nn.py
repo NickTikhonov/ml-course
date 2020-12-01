@@ -1,12 +1,14 @@
 import h5py
 import pandas as pd
 import numpy as np
+import cupy
 from tqdm import trange
 
 class Sigmoid:
     @classmethod
     def f(cls, x):
-        return 1/(1 + np.exp(-x))
+        xp = cupy.get_array_module(x)
+        return 1/(1 + xp.exp(-x))
 
     @classmethod
     def d(cls, x):
@@ -16,7 +18,8 @@ class Sigmoid:
 class Tanh:
     @classmethod
     def f(cls, x):
-        return np.tanh(x)
+        xp = cupy.get_array_module(x)
+        return xp.tanh(x)
 
     @classmethod
     def d(cls, x):
@@ -31,7 +34,8 @@ class NN:
     - add support for regularisation
     """
     # n is the number of neurons in each layer
-    def __init__(self, n, act):
+    def __init__(self, n, act, gpu=False):
+        self.gpu = gpu
         self.n = n
         self.act = act
         assert len(n) >= 2
@@ -39,15 +43,17 @@ class NN:
         self.bias = self.init_bias()
 
     def init_weights(self):
+        xp = cupy if self.gpu else np
         weights = []
         for i in range(len(self.n) - 1):
-            weights.append(np.random.randn(self.n[i + 1], self.n[i]) * 0.01)
+            weights.append(xp.random.randn(self.n[i + 1], self.n[i]) * 0.01)
         return weights
 
     def init_bias(self):
+        xp = cupy if self.gpu else np
         bias = []
         for i in range(len(self.n) - 1):
-            bias.append(np.zeros((self.n[i + 1], 1)))
+            bias.append(xp.zeros((self.n[i + 1], 1)))
         return bias
         
     def n_params(self):
@@ -58,26 +64,30 @@ class NN:
         return a[-1]
 
     def loss(self, xs, ys):
+        xp = cupy if self.gpu else np
         y_hat = self.predict(xs).T
-        diff = np.sum(ys*np.log(y_hat) + (1-ys)*np.log(1-y_hat))
+        diff = xp.sum(ys*xp.log(y_hat) + (1-ys)*xp.log(1-y_hat))
         return -diff / len(xs)
 
     def onehot_acc(self, xs, ys):
+        xp = cupy if self.gpu else np
         y_hat = self.predict(xs).T
-        return np.average(np.argmax(ys, axis=1) == np.argmax(y_hat, axis=1))
+        return xp.average(xp.argmax(ys, axis=1) == xp.argmax(y_hat, axis=1))
 
     def forward(self, xs):
+        xp = cupy if self.gpu else np
         # forward pass
         z = [None]
         a = [xs.T]
 
         for i in range(len(self.weights)):
-            z.append(np.dot(self.weights[i], a[i]) + self.bias[i])
+            z.append(xp.dot(self.weights[i], a[i]) + self.bias[i])
             a.append(self.act.f(z[i + 1]))
 
         return (z, a)
 
     def backward(self, z, a, ys):
+        xp = cupy if self.gpu else np
         # backward pass
         m = a[0].shape[1]
         dz = [None for i in range(len(z))]
@@ -88,9 +98,9 @@ class NN:
         for i in reversed(range(len(self.weights))):
             ii = i + 1
             if dz[ii] is None:
-                dz[ii] = np.dot(self.weights[ii].T, dz[ii + 1]) * self.act.d(z[ii])
-            dw[ii] = (1/m) * np.dot(dz[ii], a[ii - 1].T)
-            db[ii] = (1/m) * np.sum(dz[ii], axis=1, keepdims=True)
+                dz[ii] = xp.dot(self.weights[ii].T, dz[ii + 1]) * self.act.d(z[ii])
+            dw[ii] = (1/m) * xp.dot(dz[ii], a[ii - 1].T)
+            db[ii] = (1/m) * xp.sum(dz[ii], axis=1, keepdims=True)
 
         return (dw, db)
 
@@ -121,6 +131,10 @@ class GradientDescent:
 
 class Adam:
     def __init__(self, model, xs, ys, batch_size = 0):
+        self.xp = cupy if model.gpu else np
+        if model.gpu:
+            xs = cupy.asarray(xs)
+            ys = cupy.asarray(ys)
         self.m = model
         if batch_size == 0:
             self.batches = [(xs, ys)]
@@ -148,7 +162,7 @@ class Adam:
                 (z, a) = self.m.forward(xs)
                 if dropout > 0:
                     keep = 1 - dropout
-                    a = [np.multiply(np.random.randn(ac.shape[0], ac.shape[1]) < keep, ac) / keep for ac in a]
+                    a = [self.xp.multiply(self.xp.random.randn(ac.shape[0], ac.shape[1]) < keep, ac) / keep for ac in a]
                 (dw, db) = self.m.backward(z, a, ys)
                 self.calculate_momentum(dw, db, momentum)
                    
@@ -181,8 +195,8 @@ if __name__ == "__main__":
     X_train, X_test = X[:m], X[m:]
     Y_train, Y_test = Y_new[:, :m].T, Y_new[:, m:].T
 
-    nn = NN([784,1000,1000,10], Tanh)
-    opt = Adam(nn, X_train, Y_train, batch_size=2048)
+    nn = NN([784,1000,1000,10], Tanh, gpu=True)
+    opt = Adam(nn, X_train, Y_train, batch_size=0)
     opt.train(epochs=100, lr=0.001)
 
 

@@ -1,2 +1,5 @@
-matplotlib==3.3.2
+tqdm==4.51.0
+pandas==1.1.2
 numpy==1.19.2
+h5py==3.1.0
+cupy==8.2.0

@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import cupy
 from tqdm import trange
+from livelossplot import PlotLosses
 
 class Sigmoid:
     @classmethod
@@ -25,6 +26,15 @@ class Tanh:
     def d(cls, x):
         f = cls.f(x)
         return 1 - f**2
+
+class Relu:
+    @classmethod
+    def f(cls, x):
+        return x * (x > 0)
+
+    @classmethod
+    def d(cls, x):
+        return (x > 0) * 1
 
 class NN:
     # n is the number of neurons in each layer
@@ -150,6 +160,8 @@ class Adam:
         self.sdw = None
         self.sdb = None
         self.eps = self.xp.finfo(self.xp.float64).eps
+
+        self.plot = PlotLosses()
 
     def calculate_momentum(self, dw, db, beta):
         if self.dw is None:

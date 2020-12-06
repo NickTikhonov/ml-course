@@ -5,16 +5,18 @@ import cupy
 from tqdm import trange
 from livelossplot import PlotLosses
 
+
 class Sigmoid:
     @classmethod
     def f(cls, x):
         xp = cupy.get_array_module(x)
-        return 1/(1 + xp.exp(-x))
+        return 1 / (1 + xp.exp(-x))
 
     @classmethod
     def d(cls, x):
         f = cls.f(x)
         return f * (1 - f)
+
 
 class Tanh:
     @classmethod
@@ -25,7 +27,8 @@ class Tanh:
     @classmethod
     def d(cls, x):
         f = cls.f(x)
-        return 1 - f**2
+        return 1 - f ** 2
+
 
 class Relu:
     @classmethod
@@ -35,6 +38,7 @@ class Relu:
     @classmethod
     def d(cls, x):
         return (x > 0) * 1
+
 
 class NN:
     # n is the number of neurons in each layer
@@ -59,7 +63,7 @@ class NN:
         for i in range(len(self.n) - 1):
             bias.append(xp.zeros((self.n[i + 1], 1)))
         return bias
-        
+
     def n_params(self):
         return sum([w.size for w in self.weights] + [b.size for b in self.bias])
 
@@ -70,7 +74,7 @@ class NN:
     def loss(self, xs, ys):
         xp = cupy if self.gpu else np
         y_hat = self.predict(xs).T
-        diff = xp.sum(ys*xp.log(y_hat) + (1-ys)*xp.log(1-y_hat))
+        diff = xp.sum(ys * xp.log(y_hat) + (1 - ys) * xp.log(1 - y_hat))
         return -diff / len(xs)
 
     def onehot_acc(self, xs, ys):
@@ -93,7 +97,6 @@ class NN:
             else:
                 a.append(self.act.f(z[i + 1]))
 
-
         return (z, a)
 
     def backward(self, z, a, ys):
@@ -109,15 +112,16 @@ class NN:
             ii = i + 1
             if dz[ii] is None:
                 dz[ii] = xp.dot(self.weights[ii].T, dz[ii + 1]) * self.act.d(z[ii])
-            dw[ii] = (1/m) * xp.dot(dz[ii], a[ii - 1].T)
-            db[ii] = (1/m) * xp.sum(dz[ii], axis=1, keepdims=True)
+            dw[ii] = (1 / m) * xp.dot(dz[ii], a[ii - 1].T)
+            db[ii] = (1 / m) * xp.sum(dz[ii], axis=1, keepdims=True)
 
         return (dw, db)
 
-            
+
 def batch(xs, ys, group_size):
     for i in range(0, len(xs), group_size):
-        yield (xs[i:i+group_size], ys[i:i+group_size])
+        yield (xs[i : i + group_size], ys[i : i + group_size])
+
 
 class GradientDescent:
     def __init__(self, model, xs, ys):
@@ -128,19 +132,20 @@ class GradientDescent:
     def train(self, epochs=1, lr=0.0001, dropout=0):
         epochs = trange(epochs, desc="BasicO")
         for i in epochs:
-            epochs.set_description('BasicO (loss=%g)' % self.m.loss(self.xs, self.ys))
+            epochs.set_description("BasicO (loss=%g)" % self.m.loss(self.xs, self.ys))
             (z, a) = self.m.forward(self.xs)
             if dropout > 0:
                 keep = 1 - dropout
                 a = [np.multiply(np.random.randn(ac.shape[0], ac.shape[1]) < keep, ac) / keep for ac in a]
             (dw, db) = self.m.backward(z, a, self.ys)
             for i in range(len(self.m.weights)):
-                self.m.weights[i] -= (lr * dw[i + 1])
+                self.m.weights[i] -= lr * dw[i + 1]
             for i in range(len(self.m.bias)):
-                self.m.bias[i] -= (lr * db[i + 1])
+                self.m.bias[i] -= lr * db[i + 1]
+
 
 class Adam:
-    def __init__(self, model, xs, ys, xt, yt, batch_size = 0):
+    def __init__(self, model, xs, ys, xt, yt, batch_size=0):
         self.xp = cupy if model.gpu else np
         if model.gpu:
             xs = cupy.asarray(xs)
@@ -151,7 +156,7 @@ class Adam:
         if batch_size == 0:
             self.batches = [(xs, ys)]
         else:
-            self.batches = [(xs[i:i + batch_size], ys[i:i + batch_size]) for i in range(0, len(xs), batch_size)]
+            self.batches = [(xs[i : i + batch_size], ys[i : i + batch_size]) for i in range(0, len(xs), batch_size)]
         self.xt = xt
         self.yt = yt
 
@@ -176,32 +181,31 @@ class Adam:
             self.db[i] = (self.db[i] * beta) + (db[i] * (1 - beta))
             self.sdb[i] = (self.sdb[i] * beta) + (self.xp.square(db[i]) * (1 - beta))
 
-
     def train(self, epochs=1, lr=0.0001, dropout=0, momentum=0.9):
         epochs = trange(epochs, desc="BasicO")
         for _ in epochs:
             for (xs, ys) in self.batches:
-                epochs.set_description('Adam (acc=%g, val_acc=%g)' % (self.m.onehot_acc(xs, ys), self.m.onehot_acc(self.xt, self.yt)))
+                epochs.set_description("Adam (acc=%g, val_acc=%g)" % (self.m.onehot_acc(xs, ys), self.m.onehot_acc(self.xt, self.yt)))
                 (z, a) = self.m.forward(xs)
                 if dropout > 0:
                     keep = 1 - dropout
                     a = [self.xp.multiply(self.xp.random.randn(ac.shape[0], ac.shape[1]) < keep, ac) / keep for ac in a]
                 (dw, db) = self.m.backward(z, a, ys)
                 self.calculate_momentum(dw, db, momentum)
-                   
+
                 for iw in range(len(self.m.weights)):
-                    self.m.weights[iw] -= (lr * self.xp.divide(self.dw[iw + 1], (self.xp.sqrt(self.sdw[iw + 1]) + self.eps)))
+                    self.m.weights[iw] -= lr * self.xp.divide(self.dw[iw + 1], (self.xp.sqrt(self.sdw[iw + 1]) + self.eps))
 
                 for ib in range(len(self.m.bias)):
-                    self.m.bias[ib] -= (lr * (self.db[ib + 1]/(self.xp.sqrt(self.sdb[ib + 1]) + self.eps)))
+                    self.m.bias[ib] -= lr * (self.db[ib + 1] / (self.xp.sqrt(self.sdb[ib + 1]) + self.eps))
 
 
 if __name__ == "__main__":
-    MNIST_data = h5py.File("./data/mnist.hdf5", 'r')
-    x_train = np.float32(MNIST_data['x_train'][:])
-    y_train = np.int32(np.array(MNIST_data['y_train'][:, 0])).reshape(-1, 1)
-    x_test  = np.float32(MNIST_data['x_test'][:])
-    y_test  = np.int32(np.array(MNIST_data['y_test'][:, 0])).reshape(-1, 1)
+    MNIST_data = h5py.File("./data/mnist.hdf5", "r")
+    x_train = np.float32(MNIST_data["x_train"][:])
+    y_train = np.int32(np.array(MNIST_data["y_train"][:, 0])).reshape(-1, 1)
+    x_test = np.float32(MNIST_data["x_test"][:])
+    y_test = np.int32(np.array(MNIST_data["y_test"][:, 0])).reshape(-1, 1)
     MNIST_data.close()
 
     X = np.vstack((x_train, x_test))
@@ -210,7 +214,7 @@ if __name__ == "__main__":
     digits = 10
     examples = y.shape[0]
     y = y.reshape(1, examples)
-    Y_new = np.eye(digits)[y.astype('int32')]
+    Y_new = np.eye(digits)[y.astype("int32")]
     Y_new = Y_new.T.reshape(digits, examples)
 
     # number of training set
@@ -219,8 +223,6 @@ if __name__ == "__main__":
     X_train, X_test = X[:m], X[m:]
     Y_train, Y_test = Y_new[:, :m].T, Y_new[:, m:].T
 
-    nn = NN([784,1000,1000,10], Tanh, gpu=True)
+    nn = NN([784, 1000, 1000, 10], Tanh, gpu=True)
     opt = Adam(nn, X_train, Y_train, X_test, Y_test, batch_size=4096 * 4)
     opt.train(epochs=100, lr=0.001, momentum=0.90)
-
-

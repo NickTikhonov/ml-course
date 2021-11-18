@@ -1,6 +1,8 @@
 # nn
 
-Simple neural network implementation.
+The most barebones nn implementation + GPU-enabled 
+training harness that can be used to train serious models. 
+Using only `numpy` and `pandas`. 
 
 Supports:
 
